@@ -25,18 +25,40 @@ module cdc_reset_sync #(
         end
     end
 
+    // Separate internal shift stages from final reset-driver flop so Verilator
+    // (5.055+) sees zero SYNCASYNCNET overlap on the reset net.
     (* ASYNC_REG = "TRUE", SHREG_EXTRACT = "NO", preserve,
        altera_attribute = "-name SYNCHRONIZER_IDENTIFICATION FORCED_IF_ASYNCHRONOUS; -name DONT_MERGE_REGISTER ON; -name PRESERVE_REGISTER ON" *)
-    logic [STAGES-1:0] rst_pipe;
+    logic [STAGES-2:0] rst_pipe;
 
-    always_ff @(posedge clk or negedge arst_n) begin
-        if (!arst_n) begin
-            rst_pipe <= '0;
-        end else begin
-            rst_pipe <= {rst_pipe[STAGES-2:0], 1'b1};
+    (* ASYNC_REG = "TRUE", SHREG_EXTRACT = "NO", preserve,
+       altera_attribute = "-name SYNCHRONIZER_IDENTIFICATION FORCED_IF_ASYNCHRONOUS; -name DONT_MERGE_REGISTER ON; -name PRESERVE_REGISTER ON" *)
+    logic srst_reg;
+
+    generate
+        if (STAGES == 2) begin : gen_2stage
+            always_ff @(posedge clk or negedge arst_n) begin
+                if (!arst_n) begin
+                    rst_pipe <= '0;
+                    srst_reg <= 1'b0;
+                end else begin
+                    rst_pipe <= 1'b1;
+                    srst_reg <= rst_pipe[0];
+                end
+            end
+        end else begin : gen_nstage
+            always_ff @(posedge clk or negedge arst_n) begin
+                if (!arst_n) begin
+                    rst_pipe <= '0;
+                    srst_reg <= 1'b0;
+                end else begin
+                    rst_pipe <= {rst_pipe[STAGES-3:0], 1'b1};
+                    srst_reg <= rst_pipe[STAGES-2];
+                end
+            end
         end
-    end
+    endgenerate
 
-    assign srst_n = rst_pipe[STAGES-1];
+    assign srst_n = srst_reg;
 
 endmodule
