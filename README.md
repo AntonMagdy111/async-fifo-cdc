@@ -67,7 +67,7 @@ All 6 clock-ratio, threshold, overflow/underflow, and mid-flight asynchronous re
 | **ModelSim Intel FPGA 2020.1 + Bindable SVA** (`formal/async_fifo_sva.sv`) | 6 scenarios, **21,000 / 21,000** bit-exact TX | **PASS — 0 errors, 0 SVA failures** |
 | **Verilator 5.024 (`--binary --timing`)** | 6 scenarios, **21,000 / 21,000** bit-exact TX | **PASS — 0 errors** |
 | **Icarus Verilog 12.0 (`-g2012`)** | 6 scenarios, **21,000 / 21,000** bit-exact TX | **PASS — 0 errors** |
-| **SymbiYosys Formal (`bmc` + `prove` k-Induction + `cover`)** | Multiclock unbounded proof (Z3 SMTBMC, CI) | **Automated in GitHub Actions CI** |
+| **SymbiYosys Formal (`bmc` + `prove` k-Induction + `cover`)** | Multiclock unbounded proof (`smtbmc bitwuzla`, CI) | **PASS — `prove` (2 s), `cover` (3 s), `bmc` depth-25 (10 s)** |
 
 #### Test Scenarios & Measured Coverage Bins (`tb/tb_async_fifo.sv`)
 - **Scenario 1 (Directed Guard & Thresholds)**: Post-reset flags, empty underflow guard, full fill + `walmost_full`, full overflow guard (verifying zero memory corruption), full drain + `ralmost_empty`.
