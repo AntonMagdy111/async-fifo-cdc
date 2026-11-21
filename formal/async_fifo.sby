@@ -31,7 +31,7 @@ chparam -set DATA_WIDTH 8 -set ADDR_WIDTH 3 -set SYNC_STAGES 2 -set ALMOST_FULL_
 prep -top async_fifo
 
 [files]
-../rtl/cdc_sync_2ff.sv
-../rtl/cdc_reset_sync.sv
-../rtl/fifo_mem_dp.sv
-../rtl/async_fifo.sv
+rtl/cdc_sync_2ff.sv
+rtl/cdc_reset_sync.sv
+rtl/fifo_mem_dp.sv
+rtl/async_fifo.sv
