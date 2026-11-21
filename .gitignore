@@ -1,0 +1,17 @@
+work/
+obj_dir/
+synth/build/
+formal/async_fifo_bmc/
+formal/async_fifo_prove/
+formal/async_fifo_cover/
+*.vvp
+*.vcd
+*.fst
+*.wlf
+*.vstf
+transcript
+modelsim.ini
+sim/tb_bind_sva.sv
+__pycache__/
+*.pyc
+.DS_Store

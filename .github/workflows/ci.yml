@@ -1,0 +1,54 @@
+name: RTL Lint, Simulation, Formal & Synthesis CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verilator-and-iverilog:
+    name: Verilator Lint + Simulation & Icarus Verilog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OSS CAD Suite (Verilator, Icarus, Yosys, SymbiYosys, Z3)
+        run: |
+          RELEASE_TAG=$(curl -s https://api.github.com/repos/YosysHQ/oss-cad-suite-build/releases/latest | grep -oP '"tag_name": "\K[^"]+')
+          DATE_STR=$(echo "$RELEASE_TAG" | tr -d '-')
+          URL="https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${RELEASE_TAG}/oss-cad-suite-linux-x64-${DATE_STR}.tgz"
+          echo "Downloading ${URL}"
+          curl -sSL "$URL" -o oss-cad-suite.tgz
+          tar -xzf oss-cad-suite.tgz
+          echo "$PWD/oss-cad-suite/bin" >> $GITHUB_PATH
+
+      - name: Strict Verilator Lint (-Wall, 0 Warnings)
+        run: |
+          verilator --version
+          verilator --lint-only -Wall -Werror-LATCH -Werror-WIDTH -Werror-UNOPTFLAT \
+            --top-module async_fifo \
+            rtl/cdc_sync_2ff.sv rtl/cdc_reset_sync.sv rtl/fifo_mem_dp.sv rtl/async_fifo.sv
+
+      - name: Verilator Full Dual-Clock Regression (>20,000 TX)
+        run: |
+          verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-BLKSEQ -Wno-TIMESCALEMOD \
+            --top-module tb_async_fifo \
+            rtl/cdc_sync_2ff.sv rtl/cdc_reset_sync.sv rtl/fifo_mem_dp.sv rtl/async_fifo.sv \
+            tb/tb_async_fifo.sv -o Vtb_async_fifo
+          ./obj_dir/Vtb_async_fifo
+
+      - name: Icarus Verilog 12 Cross-Simulator Regression
+        run: |
+          iverilog -g2012 -o tb_async_fifo.vvp \
+            rtl/cdc_sync_2ff.sv rtl/cdc_reset_sync.sv rtl/fifo_mem_dp.sv rtl/async_fifo.sv \
+            tb/tb_async_fifo.sv
+          vvp tb_async_fifo.vvp
+
+      - name: SymbiYosys Formal Verification (BMC + Unbounded k-Induction + Cover)
+        run: |
+          sby -f formal/async_fifo.sby
+
+      - name: Yosys Generic ASIC/RTL Synthesis Check
+        run: |
+          yosys -p "read_verilog -sv rtl/cdc_sync_2ff.sv rtl/cdc_reset_sync.sv rtl/fifo_mem_dp.sv rtl/async_fifo.sv; synth -top async_fifo; check -assert; stat"
