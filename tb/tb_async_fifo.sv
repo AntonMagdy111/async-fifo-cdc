@@ -91,9 +91,10 @@ module tb_async_fifo;
     integer sb_head, sb_tail, sb_count;
 
     // Global verification counters & functional coverage bins
-    integer total_writes, total_reads, total_errors;
-    integer cov_full_hit, cov_empty_hit, cov_af_hit, cov_ae_hit;
-    integer cov_overflow_blk, cov_underflow_blk, cov_wrap_hit, cov_reset_rec;
+    integer total_writes = 0, total_reads = 0, total_errors = 0;
+    integer w_mon_errors = 0, r_mon_errors = 0;
+    integer cov_full_hit = 0, cov_empty_hit = 0, cov_af_hit = 0, cov_ae_hit = 0;
+    integer cov_overflow_blk = 0, cov_underflow_blk = 0, cov_wrap_hit = 0, cov_reset_rec = 0;
 
     // LFSR pseudo-random generators (portable & deterministic across simulators)
     logic [31:0] w_lfsr, r_lfsr;
@@ -114,16 +115,16 @@ module tb_async_fifo;
             wd = dut.wptr ^ prev_wptr_mon;
             if ((wd & (wd - {{ADDR_WIDTH{1'b0}}, 1'b1})) != '0) begin
                 $display("[FAIL] Write Gray pointer multi-bit jump: %b -> %b @ %0t", prev_wptr_mon, dut.wptr, $time);
-                total_errors = total_errors + 1;
+                w_mon_errors <= w_mon_errors + 1;
             end
             if (wlevel > DEPTH[ADDR_WIDTH:0]) begin
                 $display("[FAIL] wlevel=%0d exceeded DEPTH=%0d @ %0t", wlevel, DEPTH, $time);
-                total_errors = total_errors + 1;
+                w_mon_errors <= w_mon_errors + 1;
             end
-            if (wfull)        cov_full_hit = cov_full_hit + 1;
-            if (walmost_full) cov_af_hit   = cov_af_hit + 1;
-            if (woverflow)    cov_overflow_blk = cov_overflow_blk + 1;
-            if (dut.wbin[ADDR_WIDTH] == 1'b1) cov_wrap_hit = cov_wrap_hit + 1;
+            if (wfull)        cov_full_hit <= cov_full_hit + 1;
+            if (walmost_full) cov_af_hit   <= cov_af_hit + 1;
+            if (woverflow)    cov_overflow_blk <= cov_overflow_blk + 1;
+            if (dut.wbin[ADDR_WIDTH] == 1'b1) cov_wrap_hit <= cov_wrap_hit + 1;
             prev_wptr_mon <= dut.wptr;
         end
     end
@@ -136,15 +137,15 @@ module tb_async_fifo;
             rd = dut.rptr ^ prev_rptr_mon;
             if ((rd & (rd - {{ADDR_WIDTH{1'b0}}, 1'b1})) != '0) begin
                 $display("[FAIL] Read Gray pointer multi-bit jump: %b -> %b @ %0t", prev_rptr_mon, dut.rptr, $time);
-                total_errors = total_errors + 1;
+                r_mon_errors <= r_mon_errors + 1;
             end
             if (rlevel > DEPTH[ADDR_WIDTH:0]) begin
                 $display("[FAIL] rlevel=%0d exceeded DEPTH=%0d @ %0t", rlevel, DEPTH, $time);
-                total_errors = total_errors + 1;
+                r_mon_errors <= r_mon_errors + 1;
             end
-            if (rempty)        cov_empty_hit = cov_empty_hit + 1;
-            if (ralmost_empty) cov_ae_hit    = cov_ae_hit + 1;
-            if (runderflow)    cov_underflow_blk = cov_underflow_blk + 1;
+            if (rempty)        cov_empty_hit <= cov_empty_hit + 1;
+            if (ralmost_empty) cov_ae_hit    <= cov_ae_hit + 1;
+            if (runderflow)    cov_underflow_blk <= cov_underflow_blk + 1;
             prev_rptr_mon <= dut.rptr;
         end
     end
@@ -297,17 +298,6 @@ module tb_async_fifo;
     // Main Verification Flow
     // =========================================================================
     initial begin
-        total_writes      = 0;
-        total_reads       = 0;
-        total_errors      = 0;
-        cov_full_hit      = 0;
-        cov_empty_hit     = 0;
-        cov_af_hit        = 0;
-        cov_ae_hit        = 0;
-        cov_overflow_blk  = 0;
-        cov_underflow_blk = 0;
-        cov_wrap_hit      = 0;
-        cov_reset_rec     = 0;
         w_lfsr            = 32'hCAFE_BABE;
         r_lfsr            = 32'hDEAD_BEEF;
         mon_active        = 1'b0;
@@ -458,6 +448,7 @@ module tb_async_fifo;
         // =====================================================================
         // Summary & Functional Coverage Report
         // =====================================================================
+        total_errors = total_errors + w_mon_errors + r_mon_errors;
         $display("================================================================");
         $display("  VERIFICATION SUMMARY");
         $display("  Total Writes Verified  : %0d", total_writes);

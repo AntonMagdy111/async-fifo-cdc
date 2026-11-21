@@ -32,7 +32,7 @@ jobs:
 
       - name: Verilator Full Dual-Clock Regression (>20,000 TX)
         run: |
-          verilator --binary --timing -Wall -Wno-DECLFILENAME -Wno-BLKSEQ -Wno-TIMESCALEMOD \
+          verilator --binary --timing --no-sched-zero-delay -Wall -Wno-DECLFILENAME -Wno-BLKSEQ -Wno-TIMESCALEMOD \
             --top-module tb_async_fifo \
             rtl/cdc_sync_2ff.sv rtl/cdc_reset_sync.sv rtl/fifo_mem_dp.sv rtl/async_fifo.sv \
             tb/tb_async_fifo.sv -o Vtb_async_fifo
