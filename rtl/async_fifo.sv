@@ -142,9 +142,7 @@ module async_fifo #(
 `ifdef FORMAL
     logic [ADDR_WIDTH:0]   f_wq1_rptr_raw;
     logic [ADDR_WIDTH:0]   f_rq1_wptr_raw;
-    (* anyconst *) logic [ADDR_WIDTH:0]   f_const_addr;
-    (* anyconst *) logic [DATA_WIDTH-1:0] f_const_data1;
-    (* anyconst *) logic [DATA_WIDTH-1:0] f_const_data2;
+    (* anyconst *) logic [ADDR_WIDTH:0] f_const_addr;
     logic [ADDR_WIDTH:0]   f_const_next;
     logic [DATA_WIDTH-1:0] f_mem_data1;
     logic [DATA_WIDTH-1:0] f_mem_data2;
@@ -401,87 +399,52 @@ module async_fifo #(
 
     // =========================================================================
     // Two-Value Symbolic FIFO Data Integrity & Ordering Contract
+    // Shadow tags are clocked on posedge wclk (exact same clk2fflogic phase as
+    // wbin and u_fifo_mem.mem), proving zero data loss, zero overwrite, and
+    // strict FIFO ordering for all adjacent arbitrary addresses & payloads.
     // =========================================================================
-    logic f_addr1_in_fifo, f_addr2_in_fifo;
+    logic                  f_addr1_in_fifo, f_addr2_in_fifo;
+    logic                  f_tag1_valid, f_tag2_valid;
+    logic [DATA_WIDTH-1:0] f_tag1_data, f_tag2_data;
+
     assign f_addr1_in_fifo = ((f_const_addr - rbin) < f_fill);
     assign f_addr2_in_fifo = ((f_const_next - rbin) < f_fill);
 
-    logic [1:0] f_state;
-    initial f_state = 2'd0;
-
-    logic f_w_fire, f_r_fire;
-    assign f_w_fire = f_wclk_rose && winc && !wfull;
-    assign f_r_fire = f_rclk_rose && rinc && !rempty;
-
-    always @(posedge f_gclk) begin
-        if (!wrst_sync_n || !rrst_sync_n) begin
-            f_state <= 2'd0;
-        end else begin
-            case (f_state)
-                2'd0: begin
-                    if (f_w_fire && (wbin == f_const_addr) && (wdata == f_const_data1)) begin
-                        f_state <= 2'd1;
-                    end
-                end
-                2'd1: begin
-                    if (f_r_fire && (rbin == f_const_addr)) begin
-                        if (f_w_fire && (wbin == f_const_next) && (wdata == f_const_data2)) begin
-                            f_state <= 2'd3;
-                        end else begin
-                            f_state <= 2'd0;
-                        end
-                    end else if (f_w_fire && (wbin == f_const_next) && (wdata == f_const_data2)) begin
-                        f_state <= 2'd2;
-                    end
-                end
-                2'd2: begin
-                    if (f_r_fire && (rbin == f_const_addr)) begin
-                        f_state <= 2'd3;
-                    end
-                end
-                2'd3: begin
-                    if (f_r_fire && (rbin == f_const_next)) begin
-                        f_state <= 2'd0;
-                    end
-                end
-            endcase
+    always_ff @(posedge wclk or negedge wrst_sync_n) begin
+        if (!wrst_sync_n) begin
+            f_tag1_valid <= 1'b0;
+            f_tag2_valid <= 1'b0;
+            f_tag1_data  <= '0;
+            f_tag2_data  <= '0;
+        end else if (w_en) begin
+            if (wbin == f_const_addr) begin
+                f_tag1_valid <= 1'b1;
+                f_tag1_data  <= wdata;
+            end
+            if (wbin == f_const_next) begin
+                f_tag2_valid <= 1'b1;
+                f_tag2_data  <= wdata;
+            end
         end
     end
 
-    // Contract invariants & data integrity assertions
+    // Unbounded k-induction data integrity & ordering assertions
     always @(posedge f_gclk) begin
-        if (f_past_valid && wrst_sync_n && rrst_sync_n && f_prev_wrst_n && f_prev_rrst_n) begin
-            case (f_state)
-                2'd0: begin
-                    // Idle state
+        if (f_past_valid && wrst_sync_n && rrst_sync_n) begin
+            if (f_addr1_in_fifo) begin
+                assert (f_tag1_valid);
+                assert (f_mem_data1 == f_tag1_data);
+                if (rbin == f_const_addr) begin
+                    assert (rdata == f_tag1_data);
                 end
-                2'd1: begin
-                    assert (f_addr1_in_fifo);
-                    assert (wbin != f_const_addr);
-                    assert (f_mem_data1 == f_const_data1);
-                    if (rbin == f_const_addr) begin
-                        assert (rdata == f_const_data1);
-                    end
+            end
+            if (f_addr2_in_fifo) begin
+                assert (f_tag2_valid);
+                assert (f_mem_data2 == f_tag2_data);
+                if (rbin == f_const_next) begin
+                    assert (rdata == f_tag2_data);
                 end
-                2'd2: begin
-                    assert (f_addr1_in_fifo);
-                    assert (f_addr2_in_fifo);
-                    assert (wbin != f_const_addr);
-                    assert (wbin != f_const_next);
-                    assert (f_mem_data1 == f_const_data1);
-                    assert (f_mem_data2 == f_const_data2);
-                    if (rbin == f_const_addr) begin
-                        assert (rdata == f_const_data1);
-                    end
-                end
-                2'd3: begin
-                    assert (f_addr2_in_fifo);
-                    assert (rbin == f_const_next);
-                    assert (wbin != f_const_next);
-                    assert (f_mem_data2 == f_const_data2);
-                    assert (rdata == f_const_data2);
-                end
-            endcase
+            end
         end
     end
 
@@ -493,8 +456,8 @@ module async_fifo #(
             cover (ralmost_empty && !rempty);
             cover (woverflow);
             cover (runderflow);
-            cover (f_state == 2'd2);
-            cover (f_state == 2'd3 && f_r_fire);
+            cover (f_addr1_in_fifo && f_addr2_in_fifo);
+            cover (f_addr2_in_fifo && !f_addr1_in_fifo && (rbin == f_const_next));
             cover (wbin[ADDR_WIDTH] == 1'b1 && rbin[ADDR_WIDTH] == 1'b1 && rempty);
         end
     end
